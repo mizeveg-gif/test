@@ -26,15 +26,43 @@ from redis_common import (
 )
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('/var/log/snmp_config_service.log', mode='a')
-    ]
-)
-logger = logging.getLogger('SNMPConfigService')
+def setup_logging():
+    """Setup logging with fallback to current directory if /var/log is not accessible."""
+    log_file_path = '/var/log/snmp_config_service.log'
+    handlers = [logging.StreamHandler(sys.stdout)]
+    
+    # Try to use /var/log, fallback to current directory if permission denied
+    try:
+        file_handler = logging.FileHandler(log_file_path, mode='a')
+        handlers.append(file_handler)
+        logger_temp = logging.getLogger('SNMPConfigServiceTemp')
+        logger_temp.addHandler(file_handler)
+        logger_temp.info("Logging to /var/log/snmp_config_service.log")
+    except PermissionError:
+        # Fallback to current directory
+        log_file_path = os.path.join(os.getcwd(), 'snmp_config_service.log')
+        file_handler = logging.FileHandler(log_file_path, mode='a')
+        handlers.append(file_handler)
+        logger_temp = logging.getLogger('SNMPConfigServiceTemp')
+        logger_temp.addHandler(file_handler)
+        logger_temp.warning(f"Cannot write to /var/log, using {log_file_path}")
+    except Exception as e:
+        # Final fallback to current directory
+        log_file_path = os.path.join(os.getcwd(), 'snmp_config_service.log')
+        file_handler = logging.FileHandler(log_file_path, mode='a')
+        handlers.append(file_handler)
+        logger_temp = logging.getLogger('SNMPConfigServiceTemp')
+        logger_temp.addHandler(file_handler)
+        logger_temp.warning(f"Logging error: {e}, using {log_file_path}")
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=handlers
+    )
+    return logging.getLogger('SNMPConfigService')
+
+logger = setup_logging()
 
 
 class SNMPVersion(str, Enum):
