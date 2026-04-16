@@ -10,6 +10,7 @@ import logging
 import os
 import sys
 import time
+import argparse
 from datetime import datetime
 from typing import Any, Dict, Optional
 import redis
@@ -31,8 +32,6 @@ class SNMPConfigService:
     """Сервис для конфигурации NET-SNMP через Redis stream."""
     
     # Пути к файлам конфигурации NET-SNMP
-    SNMPD_CONF_PATH = '/etc/snmp/snmpd.conf'
-    SNMPD_CONF_BACKUP = '/etc/snmp/snmpd.conf.backup'
     
     # Типы команд которые обрабатываем
     SUPPORTED_COMMANDS = {
@@ -44,10 +43,10 @@ class SNMPConfigService:
     def __init__(self, redis_host: str = 'localhost', redis_port: int = 6379,
                  redis_db: int = 0, redis_password: Optional[str] = None,
                  stream_name: str = 'commands', consumer_group: str = 'snmp_config_group',
-                 consumer_name: str = 'snmp_consumer_1'):
+                 consumer_name: str = 'snmp_consumer_1', config_path: str = '/etc/snmp'):
         """
         Инициализация сервиса.
-        
+
         :param redis_host: Хост Redis
         :param redis_port: Порт Redis
         :param redis_db: База данных Redis
@@ -55,6 +54,7 @@ class SNMPConfigService:
         :param stream_name: Имя stream для подписки
         :param consumer_group: Имя группы потребителей
         :param consumer_name: Имя потребителя
+        :param config_path: Путь к директории конфигурации SNMP
         """
         self.redis_host = redis_host
         self.redis_port = redis_port
@@ -63,13 +63,15 @@ class SNMPConfigService:
         self.stream_name = stream_name
         self.consumer_group = consumer_group
         self.consumer_name = consumer_name
-        
+        self.config_path = Path(config_path)
+        self.snmpd_conf_path = self.config_path / 'snmpd.conf'
+        self.snmpd_conf_backup = self.config_path / 'snmpd.conf.backup'
+
         self.redis_client = self._connect_redis()
         self._ensure_stream_and_group()
-        
+
         logger.info(f"SNMP Config Service initialized. Stream: {stream_name}, "
-                   f"Group: {consumer_group}, Consumer: {consumer_name}")
-    
+                   f"Group: {consumer_group}, Consumer: {consumer_name}, ConfigPath: {config_path}")
     def _connect_redis(self) -> redis.Redis:
         """Подключение к Redis."""
         try:
@@ -264,10 +266,10 @@ class SNMPConfigService:
     def _backup_config(self):
         """Создание резервной копии конфигурации."""
         try:
-            if os.path.exists(self.SNMPD_CONF_PATH):
+            if os.path.exists(str(self.snmpd_conf_path)):
                 import shutil
-                shutil.copy2(self.SNMPD_CONF_PATH, self.SNMPD_CONF_BACKUP)
-                logger.info(f"Backup created: {self.SNMPD_CONF_BACKUP}")
+                shutil.copy2(str(self.snmpd_conf_path), str(self.snmpd_conf_backup))
+                logger.info(f"Backup created: {str(self.snmpd_conf_backup)}")
         except Exception as e:
             logger.warning(f"Could not create backup: {e}")
     
@@ -400,11 +402,11 @@ class SNMPConfigService:
     
     def _read_current_config(self) -> list:
         """Чтение текущего файла конфигурации."""
-        if not os.path.exists(self.SNMPD_CONF_PATH):
+        if not os.path.exists(str(self.snmpd_conf_path)):
             return []
         
         try:
-            with open(self.SNMPD_CONF_PATH, 'r') as f:
+            with open(str(self.snmpd_conf_path), 'r') as f:
                 return f.readlines()
         except Exception as e:
             logger.error(f"Error reading config file: {e}")
@@ -656,16 +658,16 @@ class SNMPConfigService:
         """Запись конфигурации в файл."""
         try:
             # Убеждаемся что директория существует
-            config_dir = os.path.dirname(self.SNMPD_CONF_PATH)
+            config_dir = os.path.dirname(str(self.snmpd_conf_path))
             Path(config_dir).mkdir(parents=True, exist_ok=True)
             
-            with open(self.SNMPD_CONF_PATH, 'w') as f:
+            with open(str(self.snmpd_conf_path), 'w') as f:
                 f.write('\n'.join(config_lines))
             
             # Устанавливаем правильные права
-            os.chmod(self.SNMPD_CONF_PATH, 0o640)
+            os.chmod(str(self.snmpd_conf_path), 0o640)
             
-            logger.info(f"Configuration written to {self.SNMPD_CONF_PATH}")
+            logger.info(f"Configuration written to {str(self.snmpd_conf_path)}")
         except Exception as e:
             logger.error(f"Error writing configuration: {e}")
             raise
@@ -713,9 +715,9 @@ class SNMPConfigService:
         
         status = {
             'running': False,
-            'config_file': self.SNMPD_CONF_PATH,
-            'config_exists': os.path.exists(self.SNMPD_CONF_PATH),
-            'backup_exists': os.path.exists(self.SNMPD_CONF_BACKUP)
+            'config_file': str(self.snmpd_conf_path),
+            'config_exists': os.path.exists(str(self.snmpd_conf_path)),
+            'backup_exists': os.path.exists(str(self.snmpd_conf_backup))
         }
         
         try:
@@ -736,17 +738,27 @@ class SNMPConfigService:
 
 def main():
     """Точка входа сервиса."""
-    # Чтение конфигурации из переменных окружения
-    redis_host = os.getenv('REDIS_HOST', 'localhost')
-    redis_port = int(os.getenv('REDIS_PORT', '6379'))
-    redis_db = int(os.getenv('REDIS_DB', '0'))
-    redis_password = os.getenv('REDIS_PASSWORD')
-    stream_name = os.getenv('REDIS_STREAM_NAME', 'commands')
-    consumer_group = os.getenv('CONSUMER_GROUP', 'snmp_config_group')
+    parser = argparse.ArgumentParser(description='SNMP Config Service - listens to Redis stream and configures NET-SNMP')
+    parser.add_argument('--redis-host', default=os.getenv('REDIS_HOST', 'localhost'), help='Redis host')
+    parser.add_argument('--redis-port', type=int, default=int(os.getenv('REDIS_PORT', '6379')), help='Redis port')
+    parser.add_argument('--redis-db', type=int, default=int(os.getenv('REDIS_DB', '0')), help='Redis database')
+    parser.add_argument('--redis-password', default=os.getenv('REDIS_PASSWORD'), help='Redis password')
+    parser.add_argument('--stream-name', default=os.getenv('REDIS_STREAM_NAME', 'commands'), help='Redis stream name')
+    parser.add_argument('--consumer-group', default=os.getenv('CONSUMER_GROUP', 'snmp_config_group'), help='Consumer group name')
+    parser.add_argument('--config-path', default=os.getenv('SNMP_CONFIG_PATH', '/etc/snmp'), help='Path to SNMP config directory')
+    
+    args = parser.parse_args()
+    
+    redis_host = args.redis_host
+    redis_port = args.redis_port
+    redis_db = args.redis_db
+    redis_password = args.redis_password
+    stream_name = args.stream_name
+    consumer_group = args.consumer_group
     consumer_name = os.getenv('CONSUMER_NAME', f'snmp_consumer_{os.getpid()}')
     
     logger.info(f"Starting SNMP Config Service with config: "
-               f"Redis={redis_host}:{redis_port}, Stream={stream_name}")
+               f"Redis={redis_host}:{redis_port}, Stream={stream_name}, ConfigPath={args.config_path}")
     
     try:
         service = SNMPConfigService(
@@ -756,7 +768,8 @@ def main():
             redis_password=redis_password,
             stream_name=stream_name,
             consumer_group=consumer_group,
-            consumer_name=consumer_name
+            consumer_name=consumer_name,
+            config_path=args.config_path
         )
         
         # Запуск обработки команд
