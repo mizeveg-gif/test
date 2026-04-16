@@ -1,0 +1,25 @@
+[Unit]
+Description=SNMP Configuration Service
+Documentation=https://github.com/your-repo/snmp-config-service
+After=network.target redis.service
+Wants=redis.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/snmp-config-service
+EnvironmentFile=/etc/snmp-config-service/config.env
+ExecStart=/usr/bin/python3 /opt/snmp-config-service/snmp_config_service.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=snmp-config-service
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

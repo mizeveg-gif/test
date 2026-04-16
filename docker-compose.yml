@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: snmp_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - snmp_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  snmp-config-service:
+    build: .
+    container_name: snmp_config_service
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=
+      - REDIS_STREAM_NAME=commands
+      - CONSUMER_GROUP=snmp_config_group
+      - CONSUMER_NAME=snmp_consumer_1
+    volumes:
+      - ./snmpd.conf:/etc/snmp/snmpd.conf
+      - snmp_logs:/var/log
+    networks:
+      - snmp_network
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+
+  # Пример отправителя команд (опционально)
+  command-sender:
+    image: python:3.9-slim
+    container_name: snmp_command_sender
+    depends_on:
+      - redis
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: >
+      bash -c "
+      pip install redis &&
+      python -c \"
+import redis
+import json
+from datetime import datetime
+
+r = redis.Redis(host='redis', port=6379, decode_responses=True)
+
+# Пример команды для SNMP v2c
+command_v2 = {
+    'ID_DEVICE': 1,
+    'TYPE_COMMANDS': 'CONFIG_GENERAL_SNMP_UPDATE',
+    'DATA': {
+        'snmp_version': 'v2c',
+        'community_ro': 'public_ro',
+        'community_rw': 'private_rw'
+    },
+    'TIME': datetime.now().isoformat()
+}
+
+r.xadd('commands', {'data': json.dumps(command_v2)})
+print('Command sent:', command_v2)
+\"
+      "
+    networks:
+      - snmp_network
+
+networks:
+  snmp_network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  snmp_logs:
