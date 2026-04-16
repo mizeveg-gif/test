@@ -23,14 +23,14 @@ def test_snmp_v2_basic():
     builder = SNMPCommandBuilder.from_v2_config(
         community_ro="public",
         community_rw="private",
-        id_device=1
+        id_device=0
     )
     
     command = builder.build()
     print(json.dumps(command, indent=2))
     
     # Verify structure
-    assert command["ID_DEVICE"] == 1
+    assert command["ID_DEVICE"] == 0
     assert command["TYPE_COMMANDS"] == "CONFIG_GENERAL_SNMP_UPDATE"
     assert command["DATA"]["snmp_version"] == "v2c"
     assert command["DATA"]["community_ro"] == "public"
