@@ -140,6 +140,10 @@ class SNMPConfigService:
                     for message_id, message_data in stream_messages:
                         self._process_message(message_id, message_data)
                         
+            except redis.exceptions.TimeoutError:
+                # Штатный таймаут при отсутствии сообщений (из-за block), игнорируем
+                logger.debug("Read timeout (no new messages), continuing...")
+                continue
             except redis.ConnectionError as e:
                 logger.error(f"Redis connection error: {e}")
                 logger.info("Reconnecting to Redis...")
