@@ -179,10 +179,11 @@ class SNMPConfigService:
                 except json.JSONDecodeError:
                     command_data = normalized_data
             else:
-                command_data = normalized_data if data_str else normalized_data
+                command_data = data_str if data_str else normalized_data
             
             # Получаем тип команды (поддержка разных вариантов написания)
-            type_command = command_data.get('type_commands', command_data.get('TYPE_COMMANDS', ''))
+            # Важно: type_commands берем из исходного normalized_data, а не из распарсенного command_data
+            type_command = normalized_data.get('type_commands', normalized_data.get('TYPE_COMMANDS', ''))
             
             if type_command not in self.SUPPORTED_COMMANDS:
                 logger.warning(f"Unsupported command type: {type_command}. Available keys: {list(command_data.keys())}")
