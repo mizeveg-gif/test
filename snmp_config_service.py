@@ -249,6 +249,7 @@ class SNMPConfigService:
         logger.info("Updating SNMP configuration...")
         
         data = command_data.get('DATA', {})
+        snmp_version = data.get('snmp_version', 'v2c')
         
         # Создаем резервную копию текущей конфигурации
         self._backup_config()
@@ -259,17 +260,38 @@ class SNMPConfigService:
         # Читаем текущую конфигурацию
         existing_lines = self._read_current_config()
         
-        # Объединяем существующую конфигурацию с новыми секциями
-        merged_lines = self._merge_config(existing_lines, new_sections)
+        # Извлекаем существующие секции и остальные строки
+        existing_sections, header_lines, section_positions = self._extract_sections(existing_lines)
+        
+        # Если настраиваем v2, удаляем секцию v3, и наоборот
+        if snmp_version == 'v2c':
+            if 'SNMP_V3_CONFIG' in existing_sections:
+                del existing_sections['SNMP_V3_CONFIG']
+        elif snmp_version == 'v3':
+            if 'SNMP_V2_CONFIG' in existing_sections:
+                del existing_sections['SNMP_V2_CONFIG']
+        
+        # Объединяем существующие секции с новыми
+        merged_sections = {**existing_sections, **new_sections}
+        
+        # Формируем итоговую конфигурацию
+        final_config = self._merge_config(header_lines, merged_sections, section_positions)
         
         # Записываем новую конфигурацию
-        self._write_config(merged_lines)
-        
-        # Перезапускаем службу SNMP
-        self._restart_snmp_service()
-        
-        logger.info("SNMP configuration updated successfully")
-        return True
+        try:
+            with open(str(self.snmpd_conf_path), 'w') as f:
+                f.write(final_config)
+            logger.info(f"Configuration written to {self.snmpd_conf_path}")
+            
+            # Перезапускаем службу SNMP
+            self._restart_snmp_service()
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error writing configuration: {e}")
+            # Восстанавливаем из бэкапа при ошибке
+            self._restore_from_backup()
+            return False
     
     def _backup_config(self):
         """Создание резервной копии конфигурации."""
