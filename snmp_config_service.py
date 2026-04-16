@@ -163,26 +163,29 @@ class SNMPConfigService:
         try:
             logger.info(f"Processing message {message_id}: {message_data}")
             
+            # Нормализация ключей сообщения (поддержка разных регистров)
+            # Redis может возвращать ключи в нижнем или верхнем регистре
+            normalized_data = {}
+            for k, v in message_data.items():
+                normalized_data[k.lower()] = v
+            
             # Извлекаем данные команды
             # Сообщение может быть в формате JSON строки или уже распарсенным
-            if isinstance(message_data, dict):
-                # Если это dict, возможно данные в поле 'data' или это уже распарсенный JSON
-                data_str = message_data.get('data', message_data.get('DATA', ''))
-                if isinstance(data_str, str):
-                    try:
-                        command_data = json.loads(data_str)
-                    except json.JSONDecodeError:
-                        command_data = message_data
-                else:
-                    command_data = message_data
-            else:
-                command_data = json.loads(str(message_data))
+            data_str = normalized_data.get('data', normalized_data.get('data_command', ''))
             
-            # Получаем тип команды
-            type_command = command_data.get('TYPE_COMMANDS', '')
+            if isinstance(data_str, str):
+                try:
+                    command_data = json.loads(data_str)
+                except json.JSONDecodeError:
+                    command_data = normalized_data
+            else:
+                command_data = normalized_data if data_str else normalized_data
+            
+            # Получаем тип команды (поддержка разных вариантов написания)
+            type_command = command_data.get('type_commands', command_data.get('TYPE_COMMANDS', ''))
             
             if type_command not in self.SUPPORTED_COMMANDS:
-                logger.warning(f"Unsupported command type: {type_command}")
+                logger.warning(f"Unsupported command type: {type_command}. Available keys: {list(command_data.keys())}")
                 self._acknowledge_message(message_id)
                 return
             
