@@ -1,0 +1,101 @@
+{
+  "project_name": "Buck_Converter_LM2596",
+  "description": "Понижающий DC-DC преобразователь на базе LM2596S-5.0, 5V 3A",
+  "version": "1.0",
+  "easyeda_version": "Standard/Pro Compatible",
+  "schematic": {
+    "title": "Buck Converter - Step Down DC-DC",
+    "components": [
+      {
+        "designator": "U1",
+        "value": "LM2596S-5.0",
+        "footprint": "TO-263-5",
+        "lcsc_part": "C2891",
+        "description": "Buck Regulator 5V 3A 150kHz"
+      },
+      {
+        "designator": "C1",
+        "value": "22uF 50V",
+        "footprint": "CAP-SMD_L6.3-W6.3",
+        "lcsc_part": "C134976",
+        "description": "Electrolytic Capacitor Input"
+      },
+      {
+        "designator": "C2",
+        "value": "22uF 35V",
+        "footprint": "CAP-SMD_L6.3-W6.3",
+        "lcsc_part": "C134976",
+        "description": "Electrolytic Capacitor Output"
+      },
+      {
+        "designator": "L1",
+        "value": "10uH 3A",
+        "footprint": "IND-SMD_L12.5-W12.5",
+        "lcsc_part": "C2883654",
+        "description": "Power Inductor"
+      },
+      {
+        "designator": "D1",
+        "value": "SS34",
+        "footprint": "SMB",
+        "lcsc_part": "C130756",
+        "description": "Schottky Diode 3A 40V"
+      },
+      {
+        "designator": "J1",
+        "value": "Terminal_2Pin_5mm",
+        "footprint": "TB-2P-P5.0",
+        "lcsc_part": "C2380036",
+        "description": "Input Terminal Block"
+      },
+      {
+        "designator": "J2",
+        "value": "Terminal_2Pin_5mm",
+        "footprint": "TB-2P-P5.0",
+        "lcsc_part": "C2380036",
+        "description": "Output Terminal Block"
+      }
+    ],
+    "connections": [
+      {
+        "net": "VIN",
+        "nodes": ["J1:1", "C1:+", "U1:1"]
+      },
+      {
+        "net": "GND",
+        "nodes": ["J1:2", "C1:-", "U1:3", "U1:5", "D1:cathode", "C2:-", "J2:2"]
+      },
+      {
+        "net": "SWITCH",
+        "nodes": ["U1:2", "L1:1", "D1:anode"]
+      },
+      {
+        "net": "VOUT",
+        "nodes": ["L1:2", "C2:+", "J2:1"]
+      }
+    ]
+  },
+  "pcb_guidelines": {
+    "trace_widths": {
+      "power": "2.5mm",
+      "signal": "0.3mm"
+    },
+    "layers": {
+      "top": "Components and signal traces",
+      "bottom": "GND plane"
+    },
+    "recommendations": [
+      "Place C1 close to U1 VIN and GND pins",
+      "Keep high current paths short and wide",
+      "Add thermal relief under U1",
+      "Use via stitching for GND connection"
+    ]
+  },
+  "specifications": {
+    "input_voltage": "4.5-40V",
+    "output_voltage": "5V",
+    "max_current": "3A",
+    "switching_frequency": "150kHz",
+    "efficiency": "up to 88%"
+  }
+}

@@ -1,0 +1,26 @@
+```
+# KiCad project files
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*.kicad_pro-bak
+*.bak
+*.bck
+*.kicad_wks
+*.kicad_dru
+*.kicad_erc
+*.kicad_lbr
+*.kicad_mod
+*.lib
+*.dcm
+*.net
+*.xml
+*.svg
+*.ps
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.gif
+*.webm
+```
